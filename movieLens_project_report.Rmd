@@ -1,0 +1,276 @@
+---
+title: "MovieLens Project"
+author: "Arwa Ashi"
+date: "_`r format(Sys.Date(), '%d %B, %Y')`_"
+output:
+  pdf_document:
+    df_print: kable
+    number_sections: yes
+    toc: yes
+    fig_caption: yes
+  html_document: default
+include-before: '`\newpage{}`{=latex}'
+---
+
+```{r setup, include=FALSE}
+# Run knitr chunk options
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.align="center", out.width="70%")
+# Load wrangled, tidied and partitioned movielens data based on code provided in project instructions
+
+# Open required package libraries
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+library(caret)
+library(knitr)
+library(scales)
+library(ggthemes)
+library(lubridate)
+library(stringr)
+# Create plot theme to apply to ggplot2 element text throughout report
+plot_theme <- theme(plot.caption = element_text(size = 12, face = "italic"), axis.title = element_text(size = 12))
+```
+\newpage
+
+# **Introduction**
+
+There were Netflix recommendation systems competition to reduce the root mean squared error (RMSE). This report is using a relevant dataset to complete a data science course project sharing the same objective of reducing the RMSE. The report is divided into data cleaning and exploration, methodology, result, and conclusion sections.
+
+
+# **Data Cleaning and Exploration**
+```{r, echo=FALSE}
+##########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
+
+library(tidyverse)
+library(caret)
+library(data.table)
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(scales)
+library(forcats)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+edx <- read.csv(file = 'edx.csv')
+validation <-read.csv(file = 'validation.csv')
+```
+
+## Data Cleaning,
+
+First cleaning the edx provided data after downloading it from the provided URL. Second, save edx and validation files into csv files to avoid re-doing the fist step. Third, since the edx dataset also includes a timestamp that represents the time and data in which the rating was provided, the units are seconds since January 1, 1970, a new column date with the date was created.
+
+```{r}
+edx <- mutate(edx, date = as_datetime(timestamp))
+validation <- mutate(validation, date = as_datetime(timestamp))
+```
+
+## Data Exploration, 
+
+The edx provided dataset has 9,000,055 rows and 7 columns, with 69,878 unique users who had rated 10,677 unique movies with 797 unique genres. See Table 1. In the following, exploration for rating, movie id, user id, genres, and timestamp.
+
+```{r}
+df<- edx %>%summarize(n_movie=n_distinct(movieId),
+                n_user=n_distinct(userId),
+                n_genres=n_distinct(genres)) 
+
+df <- format(df,big.mark=",",scientific=F)
+df %>%
+  kable(caption = "The total of Unique Movie ID, User ID, and Genres", align = 'ccclll', booktabs = T,
+        format = "latex", linesep = "") %>%
+  #row_spec(1, hline_after = T) %>%
+  kable_styling(full_width = FALSE, position = "center")#, latex_options = c("scale_down", "hold_position"))
+```
+
+
+After cleaning the data to a stage that can be analyze, data exploration was done. First, exploring the distribution of each movie in the datasets by total and percentage, see Table 2. In edx data, Drama is the most rate it movie with ~ 43% and Romance is the least rated move with ~19% of total ratting. In Validation data, Drama is the most rate it move with ~ 43% and Romance is the least rated move with ~19% of total ratting. However, the total is not sum to the total dataset rows and percentage is not sum to 100 because some movieId share more than one genres.
+
+
+```{r}
+df <- data.frame(movie_type=rep(c('Drama', 'Comedy', 'Thriller','Romance','Total'), each=1),
+                 edx_total_movie=rep(c(
+                                       nrow(edx%>%filter(str_detect(genres,'Drama'))),
+                                       nrow(edx%>%filter(str_detect(genres,'Comedy'))),
+                                       nrow(edx%>%filter(str_detect(genres,'Thriller'))),
+                                       nrow(edx%>%filter(str_detect(genres,'Romance'))),
+                                       nrow(edx%>%filter(str_detect(genres,'Drama'))) +nrow(edx%>%filter(str_detect(genres,'Comedy'))) +nrow(edx%>%filter(str_detect(genres,'Thriller')))+nrow(edx%>%filter(str_detect(genres,'Romance')))
+                                       ), each=1),
+                 edx_percentage_movie=rep(c(
+                                       nrow(edx%>%filter(str_detect(genres,'Drama')))/nrow(edx)*100,
+                                       nrow(edx%>%filter(str_detect(genres,'Comedy')))/nrow(edx)*100,
+                                       nrow(edx%>%filter(str_detect(genres,'Thriller')))/nrow(edx)*100,
+                                       nrow(edx%>%filter(str_detect(genres,'Romance')))/nrow(edx)*100,
+                                       +nrow(edx%>%filter(str_detect(genres,'Drama')))/nrow(edx)*100 +nrow(edx%>%filter(str_detect(genres,'Comedy')))/nrow(edx)*100 +nrow(edx%>%filter(str_detect(genres,'Thriller')))/nrow(edx)*100 +nrow(edx%>%filter(str_detect(genres,'Romance')))/nrow(edx)*100
+                                       ), each=1),
+                 Valid_total_movie=rep(c(
+                                       nrow(validation%>%filter(str_detect(genres,'Drama'))),
+                                       nrow(validation%>%filter(str_detect(genres,'Comedy'))),
+                                       nrow(validation%>%filter(str_detect(genres,'Thriller'))),
+                                       nrow(validation%>%filter(str_detect(genres,'Romance'))),
+                                       nrow(validation%>%filter(str_detect(genres,'Drama'))) +nrow(validation%>%filter(str_detect(genres,'Comedy'))) +nrow(validation%>%filter(str_detect(genres,'Thriller'))) +nrow(validation%>%filter(str_detect(genres,'Romance')))
+                                       ), each=1),
+                 Valid_percentage_movie=rep(c(
+                                       nrow(validation%>%filter(str_detect(genres,'Drama')))/nrow(validation)*100,
+                                       nrow(validation%>%filter(str_detect(genres,'Comedy')))/nrow(validation)*100,
+                                       nrow(validation%>%filter(str_detect(genres,'Thriller')))/nrow(validation)*100,
+                                       nrow(validation%>%filter(str_detect(genres,'Romance')))/nrow(validation)*100,
+                                       nrow(validation%>%filter(str_detect(genres,'Drama')))/nrow(validation)*100 +nrow(validation%>%filter(str_detect(genres,'Comedy')))/nrow(validation)*100 +nrow(validation%>%filter(str_detect(genres,'Thriller')))/nrow(validation)*100 +nrow(validation%>%filter(str_detect(genres,'Romance')))/nrow(validation)*100
+                                       ), each=1))
+
+df <- format(df,big.mark=",",scientific=F)
+
+df %>%
+  kable(caption = "The Total and Percentage of the Movies", align = 'ccclll', booktabs = T,
+        format = "latex", linesep = "") %>%
+  #row_spec(1, hline_after = T) %>%
+  kable_styling(full_width = FALSE, position = "center", latex_options = c("scale_down", "hold_position"))
+```
+
+Let's distribute the movie rating overtime see Figure 1 where the initial date for the record is 1995-01-09 and the final date for the record is 2009-01-05.  The figure shows that the total rating is different each year.
+```{r, fig.cap="Movie Rating Distrbuted Overtime"}
+edx %>% mutate(year = year(as_datetime(timestamp, origin="1970-01-01"))) %>%
+  ggplot(aes(x=year)) +
+  geom_histogram() +
+  theme_classic()
+```
+Lets distribute the unique movies into 797 unique genres and filtering the total movie for which is greater than 300 see Figure 2. Drama movie has the highest total movie type. As a result, the highest movies' genres is Drama and is the most rated by movie id, the second highest is Comedy and is the second most rated by movie id. However, the common genres for user is Comedy then Drama but the users rated Drama the most. see Figuer 3.
+
+```{r, fig.cap="Top Movies' Distrbuted by Unique Genres"}
+edx %>% group_by(genres) %>%
+  summarize(n_movie = n_distinct(movieId))%>%
+  mutate(genres = reorder(genres,n_movie)) %>%
+  filter(n_movie >= 300) %>%
+  arrange(n_movie,genres) %>%
+  ggplot(aes(x = n_movie, y = genres, 
+             fill=genres)) + 
+  scale_fill_brewer(palette="Greys")+
+  geom_bar(stat = "identity", position = "dodge", width = 0.5)+
+  theme_classic()
+```
+
+```{r, fig.cap="Top users' Distrbuted by Unique Genres"}
+# distribution unique user id over genres
+edx %>% group_by(genres) %>%
+    summarize(n_user = n_distinct(userId))%>%
+    mutate(genres = reorder(genres,n_user))%>%
+    filter(n_user >= 50000) %>%
+    arrange(n_user,genres) %>%
+    ggplot(aes(x = n_user, y = genres, 
+               fill=genres)) + 
+    scale_fill_brewer(palette="Greys")+
+    geom_bar(stat = "identity", position = "dodge", width = 0.5)+
+    theme_classic()  
+```
+
+The average rating is 3.5 over all movies, see Table 3 for the count distribution over rates that started from 0.5 to 5 with Rate 4 having the highest distribution.
+
+```{r}
+format(data.frame(table(edx$rating)),big.mark=",",scientific=F) %>%
+  kable(caption = "The Distribution Over Rating", align = 'ccclll', booktabs = T,
+        format = "latex", linesep = "") %>%
+  kable_styling(full_width = FALSE, position = "center")
+```
+
+
+As a result, movies has different distribution for each genres and are rated unequally and each user has different total rating movie number. Insights gained, movie, user and genres effects (or bias) need to be considered in the movie recommendation system.
+
+# **Methodology**
+
+## Modelling Approaches
+
+### Introduction
+As a result of the data exploration, movies has different distribution for each genres and are rated unequally and each user has different total rating movie number. Consequently, movie, user and genres effects (or bias) need to be considered in the movie recommendation system. The root mean squared error (RMSE) is considered as a loss function to compare the models to the baseline which is represent in the following equation, 
+
+$$ \sqrt{ \frac{1}{N} \sum_{u,i} (\hat{y}_{u,i} - y_{u,i} )^2} $$
+ 
+where $N$ is the number of user-movie combinations, $y_{u,i}$ is the rating for movie $i$ by user $u$, and $\hat{y}_{u,i}$ is predictions.
+
+This report exam several models to improve the RMSE, first model, assuming the same rating for all movies and all users. Second, adding movie effect to the model. Third, adding movie and user effect to the model. Fourth, adding movie, user, genres effect to the model.Fifth, using regularization technique for movie, user and genres effect. 
+
+For the validation, the RMSE returned by testing the final algorithm on the validation set (the final hold-out test set). 
+
+###  Splitting The Data Frame
+
+Dividing the dataset into 3 data frame 'Training' has 80% of edx dataset, 'Validation' and 'Testing' has 20% of edx dataset. The Validation data frame provided an unbiased evaluation of a model fit on the training data frame.
+
+### Creating and Evaluating the Models
+
+#### First Model
+
+We start with a model that assumes the same rating for all movies and all users, with all the differences explained by random variation: If $\mu$ represents the true rating for all movies and users and $\epsilon$ represents independent errors sampled from the same distribution centered at zero, then: 
+
+$$ Y_{u,i} = \mu + \epsilon_{u,i} $$
+In this case, the least squares estimate of $\mu$, the estimate that minimizes the root mean squared error, is the average rating of all movies across all users.
+
+#### Second Model
+
+Improving initial model by adding a term, $b_i$, that represents the average rating for movie $i$ :
+
+$$ Y_{u,i} = \mu + b_i + \epsilon_{u,i}$$
+ 
+where $b_i$is the average of minus the overall mean for each movie $i$ .
+
+#### Third Model
+
+For further improving, adding $b_u$ to the model, the user-specific effect:
+
+$$ Y_{u,i} = \mu + b_i + b_u+ \epsilon_{u,i}$$
+ 
+where $b_u$is the average of minus the overall mean for each user $i$ .
+
+#### Fourth Model
+
+For further improving, adding $b_g$ to the model, the genres effect:
+
+$$ Y_{u,i} = \mu + b_i + b_u+ b_g + \epsilon_{u,i}$$
+ 
+where $b_g$is the average of minus the overall mean for each genres $i$ .
+
+#### Fifth Model
+
+For more improving to the results, regularization is considered. Regularization constrains the total variability of the effect sizes by penalizing large estimates that come from small sample sizes. To estimate the $b$’s, we will now minimize this equation, which contains a penalty term:
+
+$$ \frac{1}{N} \sum_{u,i} (y_{u,i} - \mu - b_i)^2 + \lambda \sum_i b^2_i$$
+The first term is the mean squared error and the second is a penalty term that gets larger when many $b$’s are large. The values of $b$ that minimize this equation are given by:
+
+$$ \hat{b}_i(\lambda) = \frac{1}{\lambda + n_i} \sum_{u=1}^{n_i} (Y_{u,i} - \hat{\mu})$$
+where $n_i$ is a number of ratings $b$ for movie $i$.
+
+The larger $\lambda$ is, the more we shrink. $\lambda$ is a tuning parameter, so we can use cross-validation to choose it. We should be using full cross-validation on just the training set, without using the test set until the final assessment. We can also use regularization to estimate the movie, user and genres effects. We will now minimize this equation:
+
+$$ \frac{1}{N} \sum_{u,i} (y_{u,i} - \mu - b_i - b_u - b_g)^2 + \lambda ( \sum_i b^2_i + \sum_u b^2_u + \sum_g b^2_g) $$
+
+#### Validation
+
+The RMSE returned by testing the final algorithm on the validation set (the final hold-out test set).
+
+# **Result**
+
+## Modeling Results 
+Based on first model, assuming the same rating for all movies and all users. Second, adding movie effect to the model. Third, adding movie and user effect to the model. Fourth, adding movie, user, genres effect to the model.Fifth, using regularization technique for movie, user and genres effect. For the validation, the RMSE returned by testing the final algorithm on the validation set (the final hold-out test set).The RMSE Results see Table 4
+
+```{r}
+df <- read.csv('rmse_results.csv')
+df %>%
+  kable(caption = "RMSE Results", align = 'ccclll', booktabs = T,
+        format = "latex", linesep = "") %>%
+  kable_styling(full_width = FALSE, position = "center")
+```
+
+## discusses the Model Performance
+
+The RMSE score is improved by adding additional effect to the equation. 
+
+# **Conclusion**
+
+There were Netflix recommendation systems competition to reduce the root mean squared error (RMSE). This report used a relevant dataset to complete a data science course project sharing the same objective of reducing the RMSE. The report was divided into Data cleaning and exploration, methodology, result sections. The RMSE score is improved by adding additional effect to the equation. The future work is to study the timestamp effect on the RMSE score.
+
+
+

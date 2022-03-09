@@ -1,8 +1,0 @@
-"method","RMSE"
-"Just the average",1.06053031282636
-"Movie Effect Model",0.944000370380118
-"Movie + User Effects Model",0.844039586075682
-"Movie + User + Genres Effects Model",0.843481638619859
-"Movie + User + Genres Effects Model - validation set",0.8385619627633
-"Regularized Movie + User + Genres Effect Model",0.865723409624854
-"Regularized Movie + User + Genres Effect Model - validation set",0.865303251418559
